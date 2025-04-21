@@ -206,6 +206,7 @@ pub struct TodoList {
     pub todos: HashMap<String, Todo>,
     pub active_tags: Vec<String>,
     pub filter_completed: bool,
+    pub priority_sort: Option<bool>, // true表示从高到低排序，false表示从低到高，None表示默认按时间排序
 }
 
 impl Default for TodoList {
@@ -214,6 +215,7 @@ impl Default for TodoList {
             todos: HashMap::new(),
             active_tags: Vec::new(),
             filter_completed: false,
+            priority_sort: None, // 默认按时间排序
         }
     }
 }
@@ -274,17 +276,27 @@ impl TodoList {
                 return comp;
             }
             
-            // 再按优先级（未完成的任务）
+            // 根据优先级排序设置进行排序
             if !a.completed {
-                let a_prio = priority_to_number(&a.priority);
-                let b_prio = priority_to_number(&b.priority);
-                let prio_comp = b_prio.cmp(&a_prio); // 高优先级在前
-                if prio_comp != std::cmp::Ordering::Equal {
-                    return prio_comp;
+                // 如果启用了优先级排序
+                if let Some(high_to_low) = self.priority_sort {
+                    let a_prio = priority_to_number(&a.priority);
+                    let b_prio = priority_to_number(&b.priority);
+                    
+                    // 根据排序方向决定比较方式
+                    let prio_comp = if high_to_low {
+                        b_prio.cmp(&a_prio) // 高优先级在前
+                    } else {
+                        a_prio.cmp(&b_prio) // 低优先级在前
+                    };
+                    
+                    if prio_comp != std::cmp::Ordering::Equal {
+                        return prio_comp;
+                    }
                 }
             }
             
-            // 最后按创建日期
+            // 默认按创建日期排序（从新到旧）
             b.created_at.cmp(&a.created_at)
         });
         
@@ -363,4 +375,4 @@ fn priority_to_number(priority: &Priority) -> u8 {
         Priority::High => 2,
         Priority::Critical => 3,
     }
-} 
+}

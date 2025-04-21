@@ -2,7 +2,7 @@
 name = "rodo"
 version = "0.0.1"
 edition = "2021"
-authors = ["Rodo Developer"]
+authors = ["gantoho"]
 description = "一个由Rust，Egui构建的待办事项应用程序"
 
 [dependencies]
@@ -69,4 +69,4 @@ codegen-units = 1
 panic = "abort"  # 减小二进制大小
 
 [build-dependencies]
-winres = "0.1" 
+winres = "0.1"

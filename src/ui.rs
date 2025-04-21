@@ -90,6 +90,46 @@ impl RodoApp {
                     self.view = View::Tags;
                 }
                 
+                // 优先级排序按钮
+                {
+                    let sort_text = match self.todo_list.priority_sort {
+                        Some(true) => "🔽 优先级高",   // 从高到低
+                        Some(false) => "🔼 优先级低",  // 从低到高
+                        None => "⏺️ 时间排序",       // 默认按时间排序
+                    };
+                    
+                    // 创建一个特殊风格的按钮
+                    let mut button = egui::Button::new(RichText::new(sort_text).strong());
+                    
+                    // 根据排序状态设置按钮样式
+                    if self.todo_list.priority_sort.is_some() {
+                        // 激活状态下使用填充色
+                        button = button.fill(ui.visuals().selection.bg_fill)
+                                      .stroke(egui::Stroke::new(2.0, ui.visuals().selection.stroke.color))
+                                      .rounding(egui::Rounding::same(8.0));
+                    } else {
+                        // 未激活状态下使用特殊的边框和轻微填充
+                        let accent_color = self.theme.accent;
+                        button = button.fill(Color32::from_rgba_premultiplied(
+                                    accent_color.r(), accent_color.g(), accent_color.b(), 20))
+                                 .stroke(egui::Stroke::new(2.0, accent_color))
+                                 .rounding(egui::Rounding::same(8.0));
+                    }
+                    
+                    // 添加额外的内边距使按钮更大
+                    if ui.add_sized(Vec2::new(130.0, 32.0), button).clicked() {
+                        // 切换排序状态：时间排序 -> 优先级高 -> 优先级低 -> 时间排序
+                        self.todo_list.priority_sort = match self.todo_list.priority_sort {
+                            None => Some(true),        // 时间排序 -> 优先级高
+                            Some(true) => Some(false), // 优先级高 -> 优先级低
+                            Some(false) => None,       // 优先级低 -> 时间排序
+                        };
+                        self.modified = true;
+                    }
+                }
+                
+                ui.add_space(8.0);
+                
                 // 筛选选项 - 使用按钮替代复选框，以便更加醒目
                 {
                     let filter_text = if self.todo_list.filter_completed {
@@ -440,6 +480,8 @@ impl RodoApp {
             
             // 标签编辑
             ui.label("标签:");
+            
+            // 显示已选标签
             ui.horizontal(|ui| {
                 let tags = self.new_todo.tags.clone();
                 for (i, tag) in tags.iter().enumerate() {
@@ -453,7 +495,8 @@ impl RodoApp {
                 }
             });
             
-            // 添加新标签输入框
+            // 添加新标签输入框 - 放在单独的一行
+            ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label("添加:");
                 ui.add(egui::TextEdit::singleline(&mut self.temp_tag_input).hint_text("输入标签名称"));
@@ -467,6 +510,7 @@ impl RodoApp {
                     self.modified = true;
                 }
             });
+            
             
             // 显示已有标签供选择
             ui.add_space(4.0);
@@ -728,8 +772,9 @@ impl RodoApp {
             
             // 标签管理
             ui.label("标签");
+            
+            // 显示现有标签
             ui.horizontal_wrapped(|ui| {
-                // 显示现有标签
                 let mut tags = todo.tags.clone();
                 let mut tags_to_remove = Vec::new();
                 
@@ -754,29 +799,31 @@ impl RodoApp {
                         t.tags = tags;
                     }
                 }
-                
-                // 添加新标签
-                ui.horizontal(|ui| {
-                    ui.label("新标签:");
-                    if ui.text_edit_singleline(&mut self.temp_tag_input).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        if !self.temp_tag_input.trim().is_empty() {
-                            if let Some(t) = self.todo_list.todos.get_mut(&editing_id) {
-                                t.tags.push(self.temp_tag_input.trim().to_string());
-                                self.modified = true;
-                                self.temp_tag_input.clear();
-                            }
-                        }
-                    }
-                    
-                    if ui.button("添加").clicked() && !self.temp_tag_input.trim().is_empty() {
+            });
+            
+            // 添加新标签 - 放在单独的一行
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label("新标签:");
+                if ui.text_edit_singleline(&mut self.temp_tag_input).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    if !self.temp_tag_input.trim().is_empty() {
                         if let Some(t) = self.todo_list.todos.get_mut(&editing_id) {
                             t.tags.push(self.temp_tag_input.trim().to_string());
                             self.modified = true;
                             self.temp_tag_input.clear();
                         }
                     }
-                });
+                }
+                
+                if ui.button("添加").clicked() && !self.temp_tag_input.trim().is_empty() {
+                    if let Some(t) = self.todo_list.todos.get_mut(&editing_id) {
+                        t.tags.push(self.temp_tag_input.trim().to_string());
+                        self.modified = true;
+                        self.temp_tag_input.clear();
+                    }
+                }
             });
+
             
             // 显示已有标签供选择
             ui.add_space(4.0);
@@ -992,7 +1039,11 @@ impl RodoApp {
         ui.add_space(16.0);
         
         ui.heading("其他设置");
-        ui.label("更多设置功能尚在开发中...");
+        
+        // 添加关于按钮
+        if ui.button("关于 Rodo").clicked() {
+            self.view = View::About;
+        }
         
         ui.add_space(16.0);
         
@@ -1002,6 +1053,17 @@ impl RodoApp {
             }
             
             ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+                // 恢复初始状态按钮 - 使用警告色以表示危险操作
+                let reset_button = Button::new(RichText::new("恢复初始状态").color(self.theme.error));
+                if ui.add(reset_button).clicked() {
+                    self.show_confirm(
+                        "确定要恢复初始状态吗？这将清空所有数据并重置所有设置，此操作不可撤销！",
+                        ConfirmationAction::ResetApp,
+                    );
+                }
+                
+                ui.add_space(8.0);
+                
                 if ui.button("重置默认主题").clicked() {
                     self.show_confirm(
                         "确定要重置为默认主题吗？",
@@ -1191,13 +1253,32 @@ impl RodoApp {
         ui.vertical_centered(|ui| {
             ui.add_space(32.0);
             
-            ui.heading("🗒️ Rodo");
+            ui.heading("Rodo");
             ui.add_space(16.0);
             
-            ui.label("美观的待办事项管理工具");
+            ui.label("待办事项管理工具");
             ui.add_space(8.0);
             
-            ui.label("版本: 0.1.0");
+            // 从Cargo.toml获取的信息
+            ui.label("版本: 0.0.1");
+            ui.add_space(8.0);
+            ui.label("开发者: github@xiuton@gantoho");
+            ui.add_space(8.0);
+            ui.label("描述: 一个由Rust，Egui构建的待办事项应用程序");
+            ui.add_space(16.0);
+            
+            // 开源项目地址
+            ui.horizontal(|ui| {
+                ui.label("开源项目地址:");
+                if ui.link("https://github.com/xiuton/RodoApp").clicked() {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if let Err(e) = Self::open_url("https://github.com/xiuton/RodoApp") {
+                            eprintln!("无法打开URL: {}", e);
+                        }
+                    }
+                }
+            });
             
             ui.add_space(32.0);
         });
@@ -1207,88 +1288,233 @@ impl RodoApp {
         }
     }
     
+    /// 打开URL的辅助函数
+    #[cfg(not(target_arch = "wasm32"))]
+    fn open_url(url: &str) -> Result<(), std::io::Error> {
+        #[cfg(target_os = "windows")]
+        {
+            use std::process::Command;
+            Command::new("cmd")
+                .args(["/c", "start", "", url])
+                .spawn()?;
+        }
+        
+        #[cfg(target_os = "macos")]
+        {
+            use std::process::Command;
+            Command::new("open")
+                .arg(url)
+                .spawn()?;
+        }
+        
+        #[cfg(target_os = "linux")]
+        {
+            use std::process::Command;
+            Command::new("xdg-open")
+                .arg(url)
+                .spawn()?;
+        }
+        
+        Ok(())
+    }
+    
     /// 显示导出任务对话框
     fn export_todos_dialog(&mut self) {
-        // 创建一个固定的JSON文件保存路径
-        let output_path = std::path::Path::new("todos_export.json");
+        // 使用rfd库打开文件保存对话框
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // 默认文件名
+            let default_filename = "todos_export.json";
+            
+            // 尝试打开文件保存对话框
+            if let Some(path) = rfd::FileDialog::new()
+                .set_title("选择导出文件保存位置")
+                .set_file_name(default_filename)
+                .add_filter("JSON文件", &["json"])
+                .save_file()
+            {
+                match self.export_todos(&path) {
+                    Ok(_) => {
+                        // 显示成功消息
+                        println!("成功导出任务到: {:?}", path);
+                        // 创建一个确认对话框
+                        self.show_confirm(
+                            &format!("成功导出任务到: {}", path.display()),
+                            ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                        );
+                    },
+                    Err(e) => {
+                        // 显示错误消息
+                        eprintln!("导出任务失败: {}", e);
+                        // 创建一个错误对话框
+                        self.show_confirm(
+                            &format!("导出任务失败: {}", e),
+                            ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                        );
+                    }
+                }
+            }
+        }
         
-        match self.export_todos(output_path) {
-            Ok(_) => {
-                // 显示成功消息
-                println!("成功导出任务到: {:?}", output_path);
-                // 创建一个确认对话框
-                self.show_confirm(
-                    &format!("成功导出任务到: {}", output_path.display()),
-                    ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
-                );
-            },
-            Err(e) => {
-                // 显示错误消息
-                eprintln!("导出任务失败: {}", e);
-                // 创建一个错误对话框
-                self.show_confirm(
-                    &format!("导出任务失败: {}", e),
-                    ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
-                );
+        // 如果无法打开文件选择对话框或在Web环境下，使用默认路径
+        #[cfg(target_arch = "wasm32")]
+        {
+            // 创建一个固定的JSON文件保存路径
+            let output_path = std::path::Path::new("todos_export.json");
+            
+            match self.export_todos(output_path) {
+                Ok(_) => {
+                    // 显示成功消息
+                    println!("成功导出任务到: {:?}", output_path);
+                    // 创建一个确认对话框
+                    self.show_confirm(
+                        &format!("成功导出任务到: {}", output_path.display()),
+                        ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                    );
+                },
+                Err(e) => {
+                    // 显示错误消息
+                    eprintln!("导出任务失败: {}", e);
+                    // 创建一个错误对话框
+                    self.show_confirm(
+                        &format!("导出任务失败: {}", e),
+                        ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                    );
+                }
             }
         }
     }
     
     /// 显示导入任务对话框
     fn import_todos_dialog(&mut self) {
-        // 使用固定的JSON文件路径
-        let input_path = std::path::Path::new("todos_export.json");
-        
-        // 检查文件是否存在
-        if input_path.exists() {
-            // 提示确认，因为导入会覆盖现有任务
-            self.show_confirm(
-                &format!("导入将从 {} 加载并覆盖当前所有任务，确定要继续吗？", input_path.display()),
-                ConfirmationAction::ImportTodos,
-            );
+        // 使用rfd库打开文件选择对话框
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // 默认文件路径，如果不存在则使用当前目录
+            let default_path = std::path::Path::new("todos_export.json");
+            let default_dir = if default_path.exists() {
+                default_path.parent().unwrap_or(std::path::Path::new("."))
+            } else {
+                std::path::Path::new(".")
+            };
             
-            // 保存路径，等待确认后导入
-            self.temp_input = input_path.to_string_lossy().to_string();
-        } else {
-            // 文件不存在，显示错误消息
-            self.show_confirm(
-                &format!("找不到导入文件: {}，请先导出任务", input_path.display()),
-                ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
-            );
+            // 尝试打开文件选择对话框
+            if let Some(path) = rfd::FileDialog::new()
+                .set_title("选择要导入的JSON文件")
+                .set_directory(default_dir)
+                .add_filter("JSON文件", &["json"])
+                .pick_file()
+            {
+                // 提示确认，因为导入会覆盖现有任务
+                self.show_confirm(
+                    &format!("导入将从 {} 加载并覆盖当前所有任务，确定要继续吗？", path.display()),
+                    ConfirmationAction::ImportTodos,
+                );
+                
+                // 保存路径，等待确认后导入
+                self.temp_input = path.to_string_lossy().to_string();
+            }
+        }
+        
+        // 如果无法打开文件选择对话框或在Web环境下，使用默认路径
+        #[cfg(target_arch = "wasm32")]
+        {
+            let input_path = std::path::Path::new("todos_export.json");
+            
+            // 检查文件是否存在
+            if input_path.exists() {
+                // 提示确认，因为导入会覆盖现有任务
+                self.show_confirm(
+                    &format!("导入将从 {} 加载并覆盖当前所有任务，确定要继续吗？", input_path.display()),
+                    ConfirmationAction::ImportTodos,
+                );
+                
+                // 保存路径，等待确认后导入
+                self.temp_input = input_path.to_string_lossy().to_string();
+            } else {
+                // 文件不存在，显示错误消息
+                self.show_confirm(
+                    &format!("找不到导入文件: {}，请先导出任务", input_path.display()),
+                    ConfirmationAction::ImportTodos,
+                );
+            }
         }
     }
     
     /// 显示合并导入对话框
     fn merge_todos_dialog(&mut self) {
-        // 使用固定的JSON文件路径
-        let input_path = std::path::Path::new("todos_export.json");
-        
-        // 检查文件是否存在
-        if input_path.exists() {
-            match self.merge_imported_todos(input_path) {
-                Ok(count) => {
-                    println!("成功导入 {} 个新任务", count);
-                    // 创建一个确认对话框
-                    self.show_confirm(
-                        &format!("成功导入 {} 个新任务", count),
-                        ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
-                    );
-                },
-                Err(e) => {
-                    eprintln!("导入任务失败: {}", e);
-                    // 创建一个错误对话框
-                    self.show_confirm(
-                        &format!("导入任务失败: {}", e),
-                        ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
-                    );
+        // 使用rfd库打开文件选择对话框
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // 默认文件路径，如果不存在则使用当前目录
+            let default_path = std::path::Path::new("todos_export.json");
+            let default_dir = if default_path.exists() {
+                default_path.parent().unwrap_or(std::path::Path::new("."))
+            } else {
+                std::path::Path::new(".")
+            };
+            
+            // 尝试打开文件选择对话框
+            if let Some(path) = rfd::FileDialog::new()
+                .set_title("选择要合并导入的JSON文件")
+                .set_directory(default_dir)
+                .add_filter("JSON文件", &["json"])
+                .pick_file()
+            {
+                // 执行合并导入
+                match self.merge_imported_todos(&path) {
+                    Ok(count) => {
+                        println!("成功导入 {} 个新任务", count);
+                        // 创建一个确认对话框
+                        self.show_confirm(
+                            &format!("成功从 {} 导入 {} 个新任务", path.display(), count),
+                            ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                        );
+                    },
+                    Err(e) => {
+                        eprintln!("导入任务失败: {}", e);
+                        // 创建一个错误对话框
+                        self.show_confirm(
+                            &format!("导入任务失败: {}", e),
+                            ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                        );
+                    }
                 }
             }
-        } else {
-            // 文件不存在，显示错误消息
-            self.show_confirm(
-                &format!("找不到导入文件: {}，请先导出任务", input_path.display()),
-                ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
-            );
+        }
+        
+        // 如果无法打开文件选择对话框或在Web环境下，使用默认路径
+        #[cfg(target_arch = "wasm32")]
+        {
+            let input_path = std::path::Path::new("todos_export.json");
+            
+            // 检查文件是否存在
+            if input_path.exists() {
+                match self.merge_imported_todos(input_path) {
+                    Ok(count) => {
+                        println!("成功导入 {} 个新任务", count);
+                        // 创建一个确认对话框
+                        self.show_confirm(
+                            &format!("成功导入 {} 个新任务", count),
+                            ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                        );
+                    },
+                    Err(e) => {
+                        eprintln!("导入任务失败: {}", e);
+                        // 创建一个错误对话框
+                        self.show_confirm(
+                            &format!("导入任务失败: {}", e),
+                            ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                        );
+                    }
+                }
+            } else {
+                // 文件不存在，显示错误消息
+                self.show_confirm(
+                    &format!("找不到导入文件: {}，请先导出任务", input_path.display()),
+                    ConfirmationAction::ImportTodos, // 使用已有的确认动作类型
+                );
+            }
         }
     }
     
@@ -1337,6 +1563,10 @@ impl RodoApp {
                                     // 重置为默认主题并保存
                                     crate::app::RodoApp::set_theme(self, Theme::default(), ctx);
                                 },
+                                Some(ConfirmationAction::ResetApp) => {
+                                    // 恢复应用程序到初始状态
+                                    self.reset_app(ctx);
+                                },
                                 Some(ConfirmationAction::ImportTodos) => {
                                     // 使用事先保存的路径，避免借用冲突
                                     if !import_path.is_empty() {
@@ -1380,4 +1610,4 @@ impl RodoApp {
                 });
             });
     }
-} 
+}

@@ -57,6 +57,7 @@ pub enum ConfirmationAction {
     DeleteAllCompleted,
     #[allow(dead_code)]
     ResetSettings,
+    ResetApp,
     ImportTodos,
     DeleteTag(String),
 }
@@ -293,4 +294,33 @@ impl RodoApp {
             eprintln!("保存主题设置失败: {}", err);
         }
     }
-} 
+    
+    /// 恢复应用程序到初始状态
+    pub fn reset_app(&mut self, ctx: &egui::Context) {
+        // 清空所有待办事项
+        self.todo_list = TodoList::default();
+        
+        // 重置主题为默认值
+        self.theme = Theme::default();
+        self.theme.apply_to_ctx(ctx);
+        
+        // 重置其他状态
+        self.editing_todo_id = None;
+        self.new_todo = Todo::new(String::new());
+        self.temp_input = String::new();
+        self.temp_tag_input = String::new();
+        self.view = View::List;
+        
+        // 标记为已修改，以便保存更改
+        self.modified = true;
+        
+        // 保存更改
+        if let Err(err) = self.todo_list.save() {
+            eprintln!("保存待办事项失败: {}", err);
+        }
+        
+        if let Err(err) = self.theme.save() {
+            eprintln!("保存主题设置失败: {}", err);
+        }
+    }
+}
