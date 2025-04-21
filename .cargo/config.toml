@@ -1,0 +1,8 @@
+# 为Windows平台启用静态链接
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# 注意：profile.release已在Cargo.toml中定义，此处删除以避免冲突 

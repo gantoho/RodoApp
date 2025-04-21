@@ -1,0 +1,72 @@
+[package]
+name = "rodo"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rodo Developer"]
+description = "一个由Rust，Egui构建的待办事项应用程序"
+
+[dependencies]
+# 降级到eframe 0.23版本，避开被撤回的wgpu版本
+eframe = { version = "0.23.0", default-features = false, features = [
+    "accesskit",     # 无障碍特性
+    "default_fonts", # 默认字体
+    "persistence",   # 持久化
+    "wgpu",          # wgpu渲染后端
+]}
+
+# 匹配eframe 0.23需要的egui版本
+egui = { version = "0.23.0", features = ["persistence"] }
+
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+directories = "5.0"
+rand = "0.8.5"
+uuid = { version = "1.4.1", features = ["v4", "serde"] }
+rfd = "0.11"
+
+# 如果需要兼容完全不支持wgpu的系统，也可以添加glow后端
+# 但这会增加软件包大小
+# eframe = { version = "0.23.0", features = ["glow"] }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser", "windef"] }
+
+# Android相关依赖
+[target.'cfg(target_os = "android")'.dependencies]
+ndk-glue = "0.7.0"
+android-activity = "0.4"
+android_logger = "0.13"
+log = "0.4"
+
+# Windows发布相关配置
+[package.metadata.bundle]
+name = "rodo"
+identifier = "com.rodo.app"
+icon = ["assets/icons/icon.ico"]
+version = "0.1.0"
+copyright = "Copyright (c) 2023 Rodo Developer"
+category = "Productivity"
+short_description = "美观的待办事项管理应用"
+long_description = "Rodo是一个使用Rust和egui编写的待办事项管理应用程序，具有美观的界面和简单的操作。"
+
+# Android配置
+[package.metadata.android]
+package_name = "com.rodo.app"
+label = "Rodo待办"
+version_code = 1
+min_sdk_version = 23
+target_sdk_version = 33
+build_targets = ["aarch64-linux-android", "armv7-linux-androideabi"]
+icon = "@mipmap/ic_launcher"
+assets = "assets"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"  # 减小二进制大小
+
+[build-dependencies]
+winres = "0.1" 
