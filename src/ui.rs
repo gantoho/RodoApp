@@ -85,32 +85,10 @@ impl RodoApp {
             ui.heading("待办事项");
             
             ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
-                // 添加新任务按钮
-                if ui.button("添加任务").clicked() {
-                    self.view = View::AddTodo;
-                    self.new_todo = Todo::new(String::new());
-                }
-                
                 // 标签管理按钮
                 if ui.button("🏷️ 标签").clicked() {
                     self.view = View::Tags;
                 }
-                
-                // 导入/导出按钮
-                ui.menu_button("导入/导出", |ui| {
-                    if ui.button("导出任务").clicked() {
-                        self.export_todos_dialog();
-                        ui.close_menu();
-                    }
-                    if ui.button("导入任务").clicked() {
-                        self.import_todos_dialog();
-                        ui.close_menu();
-                    }
-                    if ui.button("合并导入").clicked() {
-                        self.merge_todos_dialog();
-                        ui.close_menu();
-                    }
-                });
                 
                 // 筛选选项 - 使用按钮替代复选框，以便更加醒目
                 {
@@ -345,6 +323,35 @@ impl RodoApp {
                 }
             });
         }
+        
+        // 添加浮动的添加任务按钮
+        ui.allocate_ui_at_rect(
+            egui::Rect::from_min_size(
+                egui::pos2(ui.available_rect_before_wrap().right() - 150.0, ui.available_rect_before_wrap().bottom() - 60.0),
+                egui::vec2(130.0, 50.0)
+            ),
+            |ui| {
+                // 创建一个特殊风格的"添加任务"按钮
+                let mut add_button = Button::new(
+                    RichText::new("➕ 添加任务")
+                        .strong()
+                        .size(18.0)
+                );
+                
+                // 使用主题的强调色作为背景，使按钮更加醒目
+                let accent_color = self.theme.accent;
+                add_button = add_button
+                    .fill(accent_color)
+                    .stroke(egui::Stroke::new(1.5, Color32::WHITE))
+                    .rounding(egui::Rounding::same(8.0));
+                
+                // 添加额外的内边距和阴影效果
+                if ui.add_sized(Vec2::new(130.0, 46.0), add_button).clicked() {
+                    self.view = View::AddTodo;
+                    self.new_todo = Todo::new(String::new());
+                }
+            }
+        );
     }
     
     /// 渲染添加新待办事项页面
@@ -446,6 +453,7 @@ impl RodoApp {
                 }
             });
             
+            // 添加新标签输入框
             ui.horizontal(|ui| {
                 ui.label("添加:");
                 ui.add(egui::TextEdit::singleline(&mut self.temp_tag_input).hint_text("输入标签名称"));
@@ -459,6 +467,43 @@ impl RodoApp {
                     self.modified = true;
                 }
             });
+            
+            // 显示已有标签供选择
+            ui.add_space(4.0);
+            ui.label("选择已有标签:");
+            
+            // 收集所有已存在的标签（不在当前任务中的）
+            let mut all_tags = std::collections::HashSet::new();
+            for todo in self.todo_list.todos.values() {
+                for tag in &todo.tags {
+                    all_tags.insert(tag.clone());
+                }
+            }
+            
+            // 移除当前任务已有的标签
+            for tag in &self.new_todo.tags {
+                all_tags.remove(tag);
+            }
+            
+            // 如果有可选的已存在标签，显示它们
+            if !all_tags.is_empty() {
+                // 将HashSet转换为Vec以便排序
+                let mut available_tags: Vec<String> = all_tags.into_iter().collect();
+                available_tags.sort(); // 字母顺序排序
+                
+                ui.horizontal_wrapped(|ui| {
+                    for tag in available_tags {
+                        if ui.button(format!("🏷️ {}", tag)).clicked() {
+                            if !self.new_todo.tags.contains(&tag) {
+                                self.new_todo.tags.push(tag);
+                                self.modified = true;
+                            }
+                        }
+                    }
+                });
+            } else {
+                ui.label(RichText::new("(暂无其他标签)").italics().small());
+            }
             
             ui.add_space(16.0);
             
@@ -733,6 +778,45 @@ impl RodoApp {
                 });
             });
             
+            // 显示已有标签供选择
+            ui.add_space(4.0);
+            ui.label("选择已有标签:");
+            
+            // 收集所有已存在的标签（不在当前任务中的）
+            let mut all_tags = std::collections::HashSet::new();
+            for t in self.todo_list.todos.values() {
+                for tag in &t.tags {
+                    all_tags.insert(tag.clone());
+                }
+            }
+            
+            // 移除当前任务已有的标签
+            for tag in &todo.tags {
+                all_tags.remove(tag);
+            }
+            
+            // 如果有可选的已存在标签，显示它们
+            if !all_tags.is_empty() {
+                // 将HashSet转换为Vec以便排序
+                let mut available_tags: Vec<String> = all_tags.into_iter().collect();
+                available_tags.sort(); // 字母顺序排序
+                
+                ui.horizontal_wrapped(|ui| {
+                    for tag in available_tags {
+                        if ui.button(format!("🏷️ {}", tag)).clicked() {
+                            if let Some(t) = self.todo_list.todos.get_mut(&editing_id) {
+                                if !t.tags.contains(&tag) {
+                                    t.tags.push(tag);
+                                    self.modified = true;
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                ui.label(RichText::new("(暂无其他标签)").italics().small());
+            }
+            
             ui.add_space(12.0);
             
             // 子任务管理
@@ -882,6 +966,26 @@ impl RodoApp {
                     // 调用app.rs中的set_theme方法
                     crate::app::RodoApp::set_theme(self, new_theme, ui.ctx());
                 }
+            }
+        });
+        
+        ui.add_space(16.0);
+        
+        // 数据导入导出区域
+        ui.heading("数据管理");
+        ui.add_space(8.0);
+        
+        ui.horizontal(|ui| {
+            if ui.button("📤 导出任务").clicked() {
+                self.export_todos_dialog();
+            }
+            
+            if ui.button("📥 导入任务").clicked() {
+                self.import_todos_dialog();
+            }
+            
+            if ui.button("📥 合并导入").clicked() {
+                self.merge_todos_dialog();
             }
         });
         
