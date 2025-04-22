@@ -5,6 +5,15 @@ mod app;
 mod theme;
 mod todo;
 mod ui;
+mod markdown;
+
+// 添加全局状态模块
+pub mod globals {
+    use std::sync::atomic::AtomicBool;
+    
+    // 声明窗口可见性全局变量
+    pub static WINDOW_VISIBLE: AtomicBool = AtomicBool::new(true);
+}
 
 use app::RodoApp;
 use eframe::egui;

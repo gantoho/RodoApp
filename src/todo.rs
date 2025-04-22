@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Datelike};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -124,6 +124,7 @@ pub struct Todo {
     pub description: String,
     pub completed: bool,
     pub created_at: DateTime<Local>,
+    pub completed_at: Option<DateTime<Local>>,
     pub due_date: Option<DateTime<Local>>,
     pub priority: Priority,
     pub emoji: Emoji,
@@ -166,6 +167,7 @@ impl Todo {
             description: String::new(),
             completed: false,
             created_at: Local::now(),
+            completed_at: None,
             due_date: None,
             priority: Priority::Medium,
             emoji: Emoji::random(),
@@ -196,6 +198,52 @@ impl Todo {
         } else {
             let completed = self.subtasks.iter().filter(|t| t.completed).count();
             completed as f32 / self.subtasks.len() as f32
+        }
+    }
+
+    /// 设置任务完成状态
+    pub fn set_completed(&mut self, completed: bool) {
+        // 如果状态变为已完成且之前不是已完成状态，记录完成时间
+        if completed && !self.completed {
+            self.completed_at = Some(Local::now());
+        } else if !completed {
+            // 如果标记为未完成，清除完成时间
+            self.completed_at = None;
+        }
+        self.completed = completed;
+    }
+
+    /// 格式化日期时间为友好字符串
+    pub fn format_date_time(dt: &DateTime<Local>) -> String {
+        // 获取当前时间
+        let now = Local::now();
+        let duration = now.signed_duration_since(*dt);
+        
+        // 今天的日期
+        let today = now.date_naive();
+        let dt_date = dt.date_naive();
+        
+        if duration.num_seconds() < 60 {
+            // 不到一分钟
+            "刚刚".to_string()
+        } else if duration.num_minutes() < 60 {
+            // 不到一小时
+            format!("{}分钟前", duration.num_minutes())
+        } else if duration.num_hours() < 24 && dt_date == today {
+            // 今天内
+            format!("今天 {}", dt.format("%H:%M"))
+        } else if (today - dt_date).num_days() == 1 {
+            // 昨天
+            format!("昨天 {}", dt.format("%H:%M"))
+        } else if (today - dt_date).num_days() < 7 {
+            // 一周内
+            format!("{} {}", dt.format("%a"), dt.format("%H:%M"))
+        } else if dt.year() == now.year() {
+            // 今年内
+            dt.format("%m-%d %H:%M").to_string()
+        } else {
+            // 更早
+            dt.format("%Y-%m-%d %H:%M").to_string()
         }
     }
 }

@@ -1,6 +1,8 @@
 use crate::theme::{Theme, ThemePresets};
 use crate::todo::{Emoji, Priority, SubTask, Todo, TodoList};
 use egui::FontId;
+use serde::{Serialize, Deserialize};
+use std::path::PathBuf;
 
 /// 应用程序的主视图部分
 #[derive(Debug, PartialEq, Clone)]
@@ -21,6 +23,8 @@ pub enum View {
     /// 关于视图
     #[allow(dead_code)]
     About,
+    /// Markdown预览视图
+    MarkdownViewer,
 }
 
 /// 应用程序状态
@@ -49,6 +53,14 @@ pub struct RodoApp {
     pub confirmation_message: String,
     /// 确认对话框回调
     pub confirmation_action: Option<ConfirmationAction>,
+    /// 当前markdown文件路径
+    pub current_markdown_path: Option<String>,
+    /// 当前markdown内容
+    pub markdown_content: String,
+    /// 当前Markdown目录路径
+    pub current_markdown_directory: Option<String>,
+    /// 当前目录中的Markdown文件列表
+    pub markdown_files: Vec<String>,
 }
 
 /// 确认对话框动作类型
@@ -65,13 +77,31 @@ pub enum ConfirmationAction {
     DeleteThemePreset(String),
 }
 
+/// Markdown目录信息
+#[derive(Serialize, Deserialize)]
+struct MarkdownDirectoryInfo {
+    directory: Option<String>,
+    files: Vec<String>,
+    current_file: Option<String>,  // 记录当前打开的文件路径
+    current_content: Option<String>,  // 记录当前文件的内容
+}
+
 impl Default for RodoApp {
     fn default() -> Self {
+        // 加载应用状态
+        let todo_list = TodoList::load();
+        let theme = Theme::default();
+        let theme_presets = ThemePresets::default();
+        
+        // 加载上次打开的Markdown目录信息
+        let (markdown_directory, markdown_files, current_file, current_content) = 
+            Self::load_markdown_directory_info().unwrap_or_else(|_| (None, Vec::new(), None, None));
+        
         Self {
             view: View::List,
-            todo_list: TodoList::load(),
-            theme: Theme::default(),
-            theme_presets: ThemePresets::load(),
+            todo_list,
+            theme,
+            theme_presets,
             editing_todo_id: None,
             new_todo: Todo::new(String::new()),
             temp_input: String::new(),
@@ -80,6 +110,10 @@ impl Default for RodoApp {
             show_confirmation: false,
             confirmation_message: String::new(),
             confirmation_action: None,
+            current_markdown_path: current_file,
+            markdown_content: current_content.unwrap_or_default(),
+            current_markdown_directory: markdown_directory,
+            markdown_files,
         }
     }
 }
@@ -118,6 +152,10 @@ impl RodoApp {
         let theme = Theme::load();
         let theme_presets = ThemePresets::load();
         
+        // 加载上次打开的Markdown目录信息
+        let (markdown_directory, markdown_files, current_file, current_content) = 
+            Self::load_markdown_directory_info().unwrap_or_else(|_| (None, Vec::new(), None, None));
+        
         let mut app = Self {
             view: View::List,
             todo_list,
@@ -131,6 +169,10 @@ impl RodoApp {
             show_confirmation: false,
             confirmation_message: String::new(),
             confirmation_action: None,
+            current_markdown_path: current_file,
+            markdown_content: current_content.unwrap_or_default(),
+            current_markdown_directory: markdown_directory,
+            markdown_files,
         };
         
         // 应用主题
@@ -198,6 +240,13 @@ impl RodoApp {
                 eprintln!("保存失败: {}", err);
             }
             self.modified = false;
+        }
+        
+        // 保存Markdown目录信息
+        if let Some(dir_path) = &self.current_markdown_directory {
+            if let Err(err) = self.save_markdown_directory_info() {
+                eprintln!("保存Markdown目录信息失败: {}", err);
+            }
         }
     }
     
@@ -342,5 +391,55 @@ impl RodoApp {
         
         self.set_theme(preset, ctx);
         Ok(())
+    }
+    
+    /// 保存Markdown目录信息
+    fn save_markdown_directory_info(&self) -> Result<(), String> {
+        // 创建包含目录信息的结构
+        let info = MarkdownDirectoryInfo {
+            directory: self.current_markdown_directory.clone(),
+            files: self.markdown_files.clone(),
+            current_file: self.current_markdown_path.clone(),
+            current_content: if !self.markdown_content.is_empty() {
+                Some(self.markdown_content.clone())
+            } else {
+                None
+            },
+        };
+        
+        // 序列化并保存
+        let path = Self::get_markdown_info_file_path()?;
+        let serialized = serde_json::to_string(&info).map_err(|e| format!("序列化Markdown目录信息失败: {}", e))?;
+        std::fs::write(path, serialized).map_err(|e| format!("写入Markdown目录信息文件失败: {}", e))?;
+        Ok(())
+    }
+    
+    /// 加载Markdown目录信息
+    fn load_markdown_directory_info() -> Result<(Option<String>, Vec<String>, Option<String>, Option<String>), String> {
+        let path = Self::get_markdown_info_file_path()?;
+        if !path.exists() {
+            return Ok((None, Vec::new(), None, None));
+        }
+        
+        let data = std::fs::read_to_string(path)
+            .map_err(|e| format!("读取Markdown目录信息文件失败: {}", e))?;
+            
+        let info: MarkdownDirectoryInfo = serde_json::from_str(&data)
+            .map_err(|e| format!("解析Markdown目录信息JSON失败: {}", e))?;
+            
+        Ok((info.directory, info.files, info.current_file, info.current_content))
+    }
+    
+    /// 获取Markdown目录信息文件路径
+    fn get_markdown_info_file_path() -> Result<PathBuf, String> {
+        let app_dirs = match directories::ProjectDirs::from("com", "rodo", "rodo") {
+            Some(dirs) => dirs,
+            None => return Err("无法获取应用数据目录".to_string()),
+        };
+        
+        let data_dir = app_dirs.data_dir();
+        std::fs::create_dir_all(data_dir).map_err(|e| format!("无法创建数据目录: {}", e))?;
+        
+        Ok(data_dir.join("markdown_info.json"))
     }
 }

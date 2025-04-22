@@ -25,9 +25,17 @@ rand = "0.8.5"
 uuid = { version = "1.4.1", features = ["v4", "serde"] }
 rfd = "0.11"
 
+# Markdown支持
+pulldown-cmark = "0.9.3"
+syntect = "5.0"
+
 # 如果需要兼容完全不支持wgpu的系统，也可以添加glow后端
 # 但这会增加软件包大小
 # eframe = { version = "0.23.0", features = ["glow"] }
+
+winit = "0.29.5"
+egui_extras = { version = "0.24.2", features = ["default", "svg"] }
+open = "5.0.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "windef"] }

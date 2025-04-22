@@ -1,8 +1,13 @@
 use crate::app::{ConfirmationAction, RodoApp, View};
 use crate::theme::Theme;
 use crate::todo::{Emoji, Priority, SubTask, Todo};
+use crate::markdown;
+use crate::globals::WINDOW_VISIBLE;
 use egui::{Button, Color32, Layout, RichText, ScrollArea, Ui, Vec2};
+use chrono::{DateTime, Local};
 use uuid::Uuid;
+use rfd::FileDialog;
+use std::sync::atomic::Ordering;
 
 /// 安全地截取字符串，避免在UTF-8字符边界处截断
 fn truncate_string(s: &str, max_chars: usize) -> String {
@@ -23,6 +28,12 @@ fn truncate_string(s: &str, max_chars: usize) -> String {
 
 impl eframe::App for RodoApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // 响应窗口可见性变化
+        if WINDOW_VISIBLE.load(Ordering::SeqCst) {
+            // 确保窗口可见并聚焦
+            ctx.request_repaint();
+        }
+        
         // 应用主题
         self.theme.apply_to_ctx(ctx);
         
@@ -40,6 +51,32 @@ impl eframe::App for RodoApp {
                     // 设置按钮
                     if ui.button("⚙️").clicked() {
                         self.view = View::Settings;
+                    }
+                    
+                    // Markdown按钮 - 在设置按钮前面
+                    if ui.button("📄").clicked() {
+                        self.view = View::MarkdownViewer;
+                        
+                        // 如果已经有保存的目录但文件列表为空，尝试重新加载目录中的文件
+                        if let Some(dir_path) = &self.current_markdown_directory {
+                            if self.markdown_files.is_empty() {
+                                if let Ok(files) = markdown::get_markdown_files(std::path::Path::new(dir_path)) {
+                                    self.markdown_files = files;
+                                }
+                            }
+                            
+                            // 如果有保存的文件路径但内容为空，尝试加载文件内容
+                            if let Some(file_path) = &self.current_markdown_path {
+                                if self.markdown_content.is_empty() {
+                                    let path = std::path::Path::new(file_path);
+                                    if path.exists() {
+                                        if let Ok(content) = markdown::load_markdown_file(path) {
+                                            self.markdown_content = content;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     
                     // 任务列表按钮
@@ -64,6 +101,7 @@ impl eframe::App for RodoApp {
                 View::Stats => self.render_stats(ui),
                 View::Tags => self.render_tags(ui),
                 View::About => self.render_about(ui),
+                View::MarkdownViewer => self.render_markdown_viewer(ui),
             }
         });
         
@@ -89,6 +127,11 @@ impl RodoApp {
                 if ui.button("🏷️ 标签").clicked() {
                     self.view = View::Tags;
                 }
+                
+                // 删除Markdown预览器按钮
+                // if ui.button("📄 Markdown").clicked() {
+                //     self.view = View::MarkdownViewer;
+                // }
                 
                 // 优先级排序按钮
                 {
@@ -138,26 +181,44 @@ impl RodoApp {
                         "🔍 隐藏已完成"
                     };
                     
-                    // 创建一个特殊风格的按钮，激活状态下使用填充色
+                    // 创建一个特殊风格的按钮，使用更具有辨识度的样式
                     let mut button = egui::Button::new(RichText::new(filter_text).strong());
                     
                     // 当过滤器激活时使用不同的样式
                     if self.todo_list.filter_completed {
-                        // 使用更明显的填充色和边框
-                        button = button.fill(ui.visuals().selection.bg_fill)
-                                      .stroke(egui::Stroke::new(2.0, ui.visuals().selection.stroke.color))
-                                      .rounding(egui::Rounding::same(8.0));
+                        // 显示所有 - 使用蓝色调
+                        let color = self.theme.accent.linear_multiply(1.2); // 使用主题的强调色，但稍微亮一点
+                        button = button.fill(color)
+                                      .stroke(egui::Stroke::new(2.0, self.theme.accent))
+                                      .rounding(egui::Rounding::same(12.0));
                     } else {
-                        // 未激活状态下使用特殊的边框和轻微填充
-                        let accent_color = self.theme.accent;
-                        button = button.fill(Color32::from_rgba_premultiplied(
-                                    accent_color.r(), accent_color.g(), accent_color.b(), 20))
-                                 .stroke(egui::Stroke::new(2.0, accent_color))
-                                 .rounding(egui::Rounding::same(8.0));
+                        // 隐藏已完成 - 使用绿色调
+                        let color = self.theme.success.linear_multiply(0.8); // 使用主题的成功色，但稍微暗一点
+                        button = button.fill(color)
+                                 .stroke(egui::Stroke::new(2.0, self.theme.success))
+                                 .rounding(egui::Rounding::same(12.0));
                     }
                     
-                    // 添加额外的内边距使按钮更大
-                    if ui.add_sized(Vec2::new(130.0, 32.0), button).clicked() {
+                    // 使用特殊尺寸和样式，添加阴影效果使按钮看起来像是浮起来的
+                    let response = ui.add_sized(Vec2::new(150.0, 36.0), button);
+                    
+                    // 绘制微弱的阴影效果
+                    let rect = response.rect;
+                    let shadow_offset = 3.0;
+                    let shadow_rect = egui::Rect::from_min_max(
+                        rect.min + Vec2::new(shadow_offset, shadow_offset),
+                        rect.max + Vec2::new(shadow_offset, shadow_offset),
+                    );
+                    
+                    // 在按钮后面绘制阴影
+                    ui.painter().rect_filled(
+                        shadow_rect,
+                        egui::Rounding::same(12.0),
+                        Color32::from_rgba_premultiplied(0, 0, 0, 30), // 半透明黑色阴影
+                    );
+                    
+                    // 处理点击事件
+                    if response.clicked() {
                         self.todo_list.filter_completed = !self.todo_list.filter_completed;
                         self.modified = true;
                     }
@@ -212,7 +273,7 @@ impl RodoApp {
             });
         } else {
             // 预先收集所有任务所需的信息
-            let todo_infos: Vec<(String, String, bool, Priority, String, Vec<String>, usize, usize)> = todos
+            let todo_infos: Vec<(String, String, bool, Priority, String, Vec<String>, usize, usize, DateTime<Local>, Option<DateTime<Local>>)> = todos
                 .iter()
                 .map(|todo| {
                     // 计算子任务完成数量
@@ -237,7 +298,7 @@ impl RodoApp {
                         Emoji::Custom(ref s) => s.clone(),
                     };
                     
-                    // 返回元组(id, title, completed, priority, emoji, tags, completed_subtasks, total_subtasks)
+                    // 返回元组(id, title, completed, priority, emoji, tags, completed_subtasks, total_subtasks, created_at, completed_at)
                     (
                         todo.id.clone(),
                         todo.title.clone(),
@@ -246,14 +307,16 @@ impl RodoApp {
                         emoji,
                         todo.tags.clone(),
                         completed_subtasks,
-                        total_subtasks
+                        total_subtasks,
+                        todo.created_at,
+                        todo.completed_at.clone()
                     )
                 })
                 .collect();
             
             // 显示任务列表
             ScrollArea::vertical().show(ui, |ui| {
-                for (id, title, completed, priority, emoji, tags, completed_subtasks, total_subtasks) in todo_infos {
+                for (id, title, completed, priority, emoji, tags, completed_subtasks, total_subtasks, created_at, completed_at) in todo_infos {
                     ui.add_space(4.0);
                     
                     // 任务卡片背景
@@ -283,7 +346,8 @@ impl RodoApp {
                                 let mut is_completed = completed;
                                 if ui.checkbox(&mut is_completed, "").clicked() {
                                     if let Some(t) = self.todo_list.todos.get_mut(&id) {
-                                        t.completed = is_completed;
+                                        // 使用新的set_completed方法
+                                        t.set_completed(is_completed);
                                         self.modified = true;
                                     }
                                 }
@@ -321,6 +385,23 @@ impl RodoApp {
                                             ui.label(RichText::new(desc).italics().small());
                                         }
                                     }
+                                    
+                                    // 显示创建时间和完成时间
+                                    ui.horizontal(|ui| {
+                                        let date_color = self.theme.text_secondary;
+                                        
+                                        // 创建时间
+                                        let created_text = format!("创建: {}", Todo::format_date_time(&created_at));
+                                        ui.label(RichText::new(created_text).color(date_color).small());
+                                        
+                                        ui.add_space(8.0);
+                                        
+                                        // 完成时间（如果已完成）
+                                        if let Some(completed_time) = completed_at {
+                                            let completed_text = format!("完成: {}", Todo::format_date_time(&completed_time));
+                                            ui.label(RichText::new(completed_text).color(date_color).small());
+                                        }
+                                    });
                                     
                                     // 显示标签（如果有）
                                     if !tags.is_empty() {
@@ -459,6 +540,30 @@ impl RodoApp {
             ui.horizontal(|ui| {
                 ui.label("标题:");
                 ui.add(egui::TextEdit::singleline(&mut self.new_todo.title).hint_text("任务标题"));
+            });
+            
+            ui.add_space(8.0);
+            
+            // 完成状态
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.new_todo.completed, "标记为完成");
+                
+                // 如果是编辑现有任务，显示创建/完成时间
+                if self.editing_todo_id.is_some() {
+                    ui.add_space(16.0);
+                    let date_color = self.theme.text_secondary;
+                    
+                    // 创建时间
+                    ui.label(RichText::new(format!("创建于: {}", Todo::format_date_time(&self.new_todo.created_at))).color(date_color).small());
+                    
+                    // 如果已完成，显示完成时间
+                    if self.new_todo.completed {
+                        if let Some(completed_time) = &self.new_todo.completed_at {
+                            ui.add_space(8.0);
+                            ui.label(RichText::new(format!("完成于: {}", Todo::format_date_time(completed_time))).color(date_color).small());
+                        }
+                    }
+                }
             });
             
             ui.add_space(8.0);
@@ -627,13 +732,22 @@ impl RodoApp {
                         // 创建新任务
                         todo.id = format!("todo-{}", Uuid::new_v4());
                         todo.created_at = chrono::Local::now();
+                        // 设置完成状态，这会自动处理完成时间
+                        if todo.completed {
+                            todo.set_completed(true);
+                        }
                         self.todo_list.todos.insert(todo.id.clone(), todo);
                     } else if let Some(todo_id) = &self.editing_todo_id {
                         // 更新现有任务
                         if let Some(existing_todo) = self.todo_list.todos.get_mut(todo_id) {
-                            // 保留创建时间和完成状态
+                            // 保留创建时间
                             todo.created_at = existing_todo.created_at.clone();
-                            todo.completed = existing_todo.completed;
+                            // 保留完成时间，只有状态改变时才更新
+                            if todo.completed != existing_todo.completed {
+                                todo.set_completed(todo.completed);
+                            } else {
+                                todo.completed_at = existing_todo.completed_at.clone();
+                            }
                             *existing_todo = todo;
                         }
                     }
@@ -713,12 +827,29 @@ impl RodoApp {
             let mut completed = todo.completed;
             if ui.checkbox(&mut completed, "标记为完成").clicked() {
                 if let Some(t) = self.todo_list.todos.get_mut(&editing_id) {
-                    t.completed = completed;
+                    t.set_completed(completed);
                     self.modified = true;
                 }
             }
             
             ui.add_space(8.0);
+            
+            // 显示任务的创建和完成时间
+            ui.horizontal(|ui| {
+                let date_color = self.theme.text_secondary;
+                
+                // 创建时间
+                ui.label(RichText::new(format!("创建于: {}", Todo::format_date_time(&todo.created_at))).color(date_color));
+                
+                ui.add_space(16.0);
+                
+                // 完成时间（如果已完成）
+                if let Some(completed_time) = &todo.completed_at {
+                    ui.label(RichText::new(format!("完成于: {}", Todo::format_date_time(completed_time))).color(date_color));
+                }
+            });
+            
+            ui.add_space(12.0);
             
             // 优先级选择
             ui.horizontal(|ui| {
@@ -1938,5 +2069,222 @@ impl RodoApp {
                     });
                 });
             });
+    }
+
+    /// 渲染Markdown预览器
+    fn render_markdown_viewer(&mut self, ui: &mut Ui) {
+        // 主要布局使用水平分割
+        egui::SidePanel::left("markdown_sidebar")
+            .resizable(true)
+            .min_width(200.0)
+            .max_width(400.0)
+            .show_inside(ui, |ui| {
+                // 左侧目录面板
+                ui.vertical(|ui| {
+                    ui.heading("文件目录");
+                    ui.separator();
+                    
+                    // 添加导航按钮
+                    ui.horizontal(|ui| {
+                        if ui.button("返回").clicked() {
+                            self.view = View::List;
+                        }
+                        
+                        if ui.button("打开目录").clicked() {
+                            if let Some(dir_path) = FileDialog::new()
+                                .set_directory(".")
+                                .pick_folder() {
+                                
+                                match markdown::get_markdown_files(&dir_path) {
+                                    Ok(files) => {
+                                        self.markdown_files = files;
+                                        self.current_markdown_directory = Some(dir_path.to_string_lossy().to_string());
+                                        
+                                        // 清除当前文件内容
+                                        self.current_markdown_path = None;
+                                        self.markdown_content.clear();
+                                    },
+                                    Err(err) => {
+                                        self.show_confirm(
+                                            &format!("无法加载Markdown目录: {}", err),
+                                            ConfirmationAction::ImportTodos,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if ui.button("打开文件").clicked() {
+                            if let Some(path) = FileDialog::new()
+                                .add_filter("Markdown", &["md", "markdown"])
+                                .set_directory(".")
+                                .pick_file() {
+                                
+                                match markdown::load_markdown_file(&path) {
+                                    Ok(content) => {
+                                        self.markdown_content = content;
+                                        self.current_markdown_path = Some(path.to_string_lossy().to_string());
+                                        
+                                        // 更新目录信息（如果文件在当前目录中）
+                                        if let Some(parent) = path.parent() {
+                                            if self.current_markdown_directory.is_none() {
+                                                self.current_markdown_directory = Some(parent.to_string_lossy().to_string());
+                                                // 加载目录中的其他文件
+                                                if let Ok(files) = markdown::get_markdown_files(parent) {
+                                                    self.markdown_files = files;
+                                                }
+                                            }
+                                        }
+                                    },
+                                    Err(err) => {
+                                        self.show_confirm(
+                                            &format!("无法加载Markdown文件: {}", err),
+                                            ConfirmationAction::ImportTodos,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    ui.separator();
+                    
+                    // 显示当前目录路径
+                    if let Some(dir_path) = &self.current_markdown_directory {
+                        ui.label(RichText::new(format!("目录: {}", dir_path)).italics());
+                        ui.separator();
+                        
+                        // 文件列表
+                        let md_files = self.markdown_files.clone();
+                        let current_path = self.current_markdown_path.clone();
+                        let dir_path_str = dir_path.clone();
+                        let theme_accent = self.theme.accent;
+                        
+                        ScrollArea::vertical().show(ui, |ui| {
+                            if md_files.is_empty() {
+                                ui.label("此目录没有Markdown文件");
+                            } else {
+                                for file_name in &md_files {
+                                    // 判断是否为当前选中的文件
+                                    let is_selected = current_path.as_ref()
+                                        .map(|path| path.ends_with(file_name))
+                                        .unwrap_or(false);
+                                    
+                                    let text = if is_selected {
+                                        RichText::new(file_name).strong().color(theme_accent)
+                                    } else {
+                                        RichText::new(file_name)
+                                    };
+                                    
+                                    // 使用克隆的文件名
+                                    let file_name_clone = file_name.clone();
+                                    if ui.selectable_label(is_selected, text).clicked() {
+                                        // 构建完整文件路径
+                                        let full_path = std::path::Path::new(&dir_path_str).join(&file_name_clone);
+                                        
+                                        // 加载选中的文件
+                                        match markdown::load_markdown_file(&full_path) {
+                                            Ok(content) => {
+                                                self.markdown_content = content;
+                                                self.current_markdown_path = Some(full_path.to_string_lossy().to_string());
+                                            },
+                                            Err(err) => {
+                                                let error_msg = format!("无法加载Markdown文件: {}", err);
+                                                self.show_confirm(
+                                                    &error_msg,
+                                                    ConfirmationAction::ImportTodos,
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        ui.centered_and_justified(|ui| {
+                            ui.label("未选择目录");
+                        });
+                    }
+                });
+            });
+            
+        // 右侧内容预览面板
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            // 文件内容区域
+            ui.vertical(|ui| {
+                // 显示当前文件名
+                if let Some(path) = &self.current_markdown_path {
+                    let file_name = std::path::Path::new(path)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "未知文件".to_string());
+                    
+                    ui.heading(file_name);
+                    ui.separator();
+                    
+                    // Markdown内容预览区域
+                    let content = self.markdown_content.clone();
+                    let is_dark_mode = ui.visuals().dark_mode;
+                    
+                    ScrollArea::vertical()
+                        .auto_shrink([false; 2])
+                        .show(ui, |ui| {
+                            if !content.is_empty() {
+                                // 设置宽度以填充可用空间
+                                ui.set_width(ui.available_width());
+                                
+                                // 使用frame来给内容添加一些边距和背景
+                                egui::Frame::none()
+                                    .inner_margin(egui::Margin::same(16.0))
+                                    .show(ui, |ui| {
+                                        markdown::render_markdown(ui, &content, is_dark_mode);
+                                    });
+                            }
+                        });
+                } else {
+                    // 没有选择文件时显示提示
+                    ui.vertical_centered(|ui| {
+                        ui.heading("Markdown预览");
+                        ui.separator();
+                        
+                        ui.add_space(100.0);
+                        
+                        ui.label(RichText::new("请在左侧选择文件或点击\"打开文件\"按钮").size(18.0));
+                        
+                        ui.add_space(20.0);
+                        
+                        if ui.button("打开文件").clicked() {
+                            if let Some(path) = FileDialog::new()
+                                .add_filter("Markdown", &["md", "markdown"])
+                                .set_directory(".")
+                                .pick_file() {
+                                
+                                match markdown::load_markdown_file(&path) {
+                                    Ok(content) => {
+                                        self.markdown_content = content;
+                                        self.current_markdown_path = Some(path.to_string_lossy().to_string());
+                                        
+                                        // 更新目录信息
+                                        if let Some(parent) = path.parent() {
+                                            self.current_markdown_directory = Some(parent.to_string_lossy().to_string());
+                                            // 加载目录中的其他文件
+                                            if let Ok(files) = markdown::get_markdown_files(parent) {
+                                                self.markdown_files = files;
+                                            }
+                                        }
+                                    },
+                                    Err(err) => {
+                                        self.show_confirm(
+                                            &format!("无法加载Markdown文件: {}", err),
+                                            ConfirmationAction::ImportTodos,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        });
     }
 }
