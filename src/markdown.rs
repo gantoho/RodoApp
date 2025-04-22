@@ -1,6 +1,6 @@
 use egui::{
-    Color32, FontId, RichText, TextFormat as EguiTextFormat,
-    Stroke, Ui, ScrollArea, Label, FontFamily, CursorIcon
+    Color32, RichText,
+    Stroke, Ui, Label, FontFamily, CursorIcon
 };
 use pulldown_cmark::{Parser, Event, Tag, HeadingLevel, CodeBlockKind};
 use syntect::highlighting::{ThemeSet, Style};
@@ -55,6 +55,7 @@ pub fn get_markdown_files(dir_path: &Path) -> Result<Vec<String>, String> {
 }
 
 /// 获取目录中的所有子目录
+#[allow(dead_code)]
 pub fn get_subdirectories(dir_path: &Path) -> Result<Vec<String>, String> {
     if !dir_path.is_dir() {
         return Err(format!("指定的路径不是目录: {}", dir_path.display()));
@@ -112,14 +113,15 @@ pub fn render_markdown(ui: &mut Ui, content: &str, is_dark: bool) {
     // 设置颜色
     let normal_color = get_text_color(is_dark);
     let code_bg_color = get_code_background(is_dark);
-    let link_color = if ui.ctx().style().visuals.dark_mode {
+    // 这个变量在代码其他地方已不再使用，但保留为内部状态
+    let _link_color = if ui.ctx().style().visuals.dark_mode {
         Color32::from_rgb(100, 149, 237) // 淡蓝色在深色主题
     } else {
         Color32::from_rgb(0, 0, 238) // 标准蓝色在浅色主题
     };
     
     // 辅助函数：刷新当前文本
-    let mut flush_text = |ui: &mut Ui, text: &mut String, format: &TextFormat| {
+    let flush_text = |ui: &mut Ui, text: &mut String, format: &TextFormat| {
         if !text.is_empty() {
             match format {
                 TextFormat::Normal => {
@@ -127,7 +129,7 @@ pub fn render_markdown(ui: &mut Ui, content: &str, is_dark: bool) {
                 },
                 TextFormat::Heading(level) => {
                     // 这里我们根据级别设置不同大小的标题
-                    let mut font_size = match level {
+                    let font_size = match level {
                         1 => 28.0,
                         2 => 24.0,
                         3 => 20.0,
@@ -155,6 +157,8 @@ pub fn render_markdown(ui: &mut Ui, content: &str, is_dark: bool) {
                         RichText::new(text.clone()).italics()
                     ));
                 },
+                // Code 变体不再使用，但保留代码逻辑以防将来使用
+                #[allow(dead_code)]
                 TextFormat::Code => {
                     let background_color = get_code_background(ui.visuals().dark_mode);
                     let text_color = get_text_color(ui.visuals().dark_mode);
@@ -248,7 +252,8 @@ pub fn render_markdown(ui: &mut Ui, content: &str, is_dark: bool) {
                         // 分行处理代码高亮
                         for line in current_code_block.lines() {
                             if let Ok(ranges) = highlighter.highlight_line(line, &syntax_set) {
-                                let mut line_text = String::new();
+                                // 使用下划线前缀表示有意不使用的变量
+                                let _line_text = String::new();
                                 let mut fragments = Vec::new();
                                 
                                 for (style, text) in ranges {
@@ -449,6 +454,7 @@ enum TextFormat {
     Heading(usize),
     Strong,
     Emphasis,
+    #[allow(dead_code)]
     Code,
     Link(String),
 } 

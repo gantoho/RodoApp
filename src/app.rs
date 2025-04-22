@@ -243,7 +243,7 @@ impl RodoApp {
         }
         
         // 保存Markdown目录信息
-        if let Some(dir_path) = &self.current_markdown_directory {
+        if let Some(_dir_path) = &self.current_markdown_directory {
             if let Err(err) = self.save_markdown_directory_info() {
                 eprintln!("保存Markdown目录信息失败: {}", err);
             }
