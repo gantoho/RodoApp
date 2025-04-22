@@ -1,6 +1,7 @@
 use egui::{Color32, Rounding, Stroke, Vec2, style::Margin, Visuals};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 /// 应用主题类型
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -11,6 +12,8 @@ pub enum ThemeType {
     Ocean,
     Forest,
     Custom,
+    // 预设主题类型
+    Preset(String),
 }
 
 impl ThemeType {
@@ -23,6 +26,7 @@ impl ThemeType {
             ThemeType::Ocean => "海洋",
             ThemeType::Forest => "森林",
             ThemeType::Custom => "自定义",
+            ThemeType::Preset(name) => name,
         }
     }
 
@@ -35,6 +39,109 @@ impl ThemeType {
             ThemeType::Ocean,
             ThemeType::Forest,
         ]
+    }
+}
+
+/// 应用主题预设集合，用于存储和加载用户自定义的主题
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ThemePresets {
+    pub presets: HashMap<String, Theme>,
+}
+
+impl ThemePresets {
+    /// 创建新的空预设集合
+    pub fn new() -> Self {
+        Self {
+            presets: HashMap::new(),
+        }
+    }
+    
+    /// 添加新的主题预设
+    pub fn add_preset(&mut self, name: String, theme: Theme) -> Result<(), String> {
+        if name.trim().is_empty() {
+            return Err("预设名称不能为空".to_string());
+        }
+        
+        // 创建一个新的主题副本，并设置其类型为Preset
+        let mut preset_theme = theme.clone();
+        preset_theme.theme_type = ThemeType::Preset(name.clone());
+        
+        // 存储到预设集合中
+        self.presets.insert(name, preset_theme);
+        self.save()?;
+        
+        Ok(())
+    }
+    
+    /// 删除主题预设
+    pub fn remove_preset(&mut self, name: &str) -> Result<(), String> {
+        if !self.presets.contains_key(name) {
+            return Err(format!("预设 '{}' 不存在", name));
+        }
+        
+        self.presets.remove(name);
+        self.save()?;
+        
+        Ok(())
+    }
+    
+    /// 获取所有预设名称
+    pub fn get_preset_names(&self) -> Vec<String> {
+        self.presets.keys().cloned().collect()
+    }
+    
+    /// 获取指定名称的预设
+    pub fn get_preset(&self, name: &str) -> Option<&Theme> {
+        self.presets.get(name)
+    }
+    
+    /// 保存预设集合到文件
+    pub fn save(&self) -> Result<(), String> {
+        let path = ThemePresets::get_presets_file_path()?;
+        let serialized = serde_json::to_string(self).map_err(|e| format!("序列化主题预设失败: {}", e))?;
+        std::fs::write(path, serialized).map_err(|e| format!("写入主题预设文件失败: {}", e))?;
+        Ok(())
+    }
+    
+    /// 从文件加载预设集合
+    pub fn load() -> Self {
+        match ThemePresets::try_load() {
+            Ok(presets) => presets,
+            Err(_) => Self::new(), // 如果加载失败，使用空的预设集合
+        }
+    }
+    
+    /// 尝试从文件加载预设集合
+    fn try_load() -> Result<Self, String> {
+        let path = ThemePresets::get_presets_file_path()?;
+        if !path.exists() {
+            return Ok(Self::new()); // 如果文件不存在，返回新的空预设集合
+        }
+        
+        let data = std::fs::read_to_string(path)
+            .map_err(|e| format!("读取主题预设文件失败: {}", e))?;
+            
+        serde_json::from_str(&data)
+            .map_err(|e| format!("解析主题预设JSON失败: {}", e))
+    }
+    
+    /// 获取主题预设文件路径
+    fn get_presets_file_path() -> Result<PathBuf, String> {
+        let app_dirs = match directories::ProjectDirs::from("com", "rodo", "rodo") {
+            Some(dirs) => dirs,
+            None => return Err("无法获取应用数据目录".to_string()),
+        };
+        
+        let data_dir = app_dirs.data_dir();
+        std::fs::create_dir_all(data_dir).map_err(|e| format!("无法创建数据目录: {}", e))?;
+        
+        Ok(data_dir.join("theme_presets.json"))
+    }
+}
+
+impl Default for ThemePresets {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -149,6 +256,7 @@ impl Theme {
             ThemeType::Ocean => Self::ocean(),
             ThemeType::Forest => Self::forest(),
             ThemeType::Custom => Self::dark(), // 自定义模式默认使用暗黑主题作为基础
+            ThemeType::Preset(_) => Self::dark(), // 预设主题默认使用暗黑主题作为基础
         }
     }
     

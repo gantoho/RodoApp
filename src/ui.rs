@@ -970,6 +970,7 @@ impl RodoApp {
             crate::theme::ThemeType::Ocean => "海洋",
             crate::theme::ThemeType::Forest => "森林",
             crate::theme::ThemeType::Custom => "自定义",
+            crate::theme::ThemeType::Preset(ref name) => name,
         }));
         
         ui.add_space(8.0);
@@ -1014,7 +1015,316 @@ impl RodoApp {
                     crate::app::RodoApp::set_theme(self, new_theme, ui.ctx());
                 }
             }
+            
+            // 添加自定义主题按钮
+            let mut custom_button = Button::new("自定义");
+            let is_custom = matches!(self.theme.theme_type, crate::theme::ThemeType::Custom);
+            
+            if is_custom {
+                custom_button = custom_button
+                    .fill(self.theme.background)
+                    .stroke(egui::Stroke::new(2.0, self.theme.accent));
+            } else {
+                custom_button = custom_button
+                    .fill(Color32::from_rgba_premultiplied(180, 180, 180, 40))
+                    .stroke(egui::Stroke::new(1.0, Color32::from_gray(150)));
+            }
+            
+            custom_button = custom_button.rounding(egui::Rounding::same(8.0));
+            
+            if ui.add_sized(Vec2::new(100.0, 40.0), custom_button).clicked() {
+                // 如果当前不是自定义主题，创建一个基于当前主题的自定义副本
+                if !is_custom {
+                    let mut custom_theme = self.theme.clone();
+                    custom_theme.theme_type = crate::theme::ThemeType::Custom;
+                    crate::app::RodoApp::set_theme(self, custom_theme, ui.ctx());
+                }
+            }
         });
+        
+        ui.add_space(16.0);
+        
+        // 自定义主题编辑器 - 只在自定义主题模式显示
+        if matches!(self.theme.theme_type, crate::theme::ThemeType::Custom) {
+            ui.collapsing("自定义主题编辑", |ui| {
+                ui.add_space(8.0);
+                
+                // 创建一个临时主题以跟踪变化
+                let mut theme = self.theme.clone();
+                let mut theme_changed = false;
+                
+                // 背景颜色
+                ui.horizontal(|ui| {
+                    ui.label("背景颜色:");
+                    let mut color = [
+                        theme.background.r() as f32 / 255.0,
+                        theme.background.g() as f32 / 255.0,
+                        theme.background.b() as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.background = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 卡片背景颜色
+                ui.horizontal(|ui| {
+                    ui.label("卡片背景:");
+                    let mut color = [
+                        theme.card_background.r() as f32 / 255.0,
+                        theme.card_background.g() as f32 / 255.0,
+                        theme.card_background.b() as f32 / 255.0,
+                    ];
+                    // 原本的方法，不使用自定义的扩展
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.card_background = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 强调色
+                ui.horizontal(|ui| {
+                    ui.label("强调色:");
+                    let mut color = [
+                        theme.accent.r() as f32 / 255.0,
+                        theme.accent.g() as f32 / 255.0,
+                        theme.accent.b() as f32 / 255.0,
+                    ];
+                    // 简单的颜色编辑按钮
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.accent = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 主文本颜色
+                ui.horizontal(|ui| {
+                    ui.label("主文本颜色:");
+                    let mut color = [
+                        theme.text.r() as f32 / 255.0,
+                        theme.text.g() as f32 / 255.0,
+                        theme.text.b() as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.text = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 次要文本颜色
+                ui.horizontal(|ui| {
+                    ui.label("次要文本:");
+                    let mut color = [
+                        theme.text_secondary.r() as f32 / 255.0,
+                        theme.text_secondary.g() as f32 / 255.0,
+                        theme.text_secondary.b() as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.text_secondary = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 成功颜色
+                ui.horizontal(|ui| {
+                    ui.label("成功颜色:");
+                    let mut color = [
+                        theme.success.r() as f32 / 255.0,
+                        theme.success.g() as f32 / 255.0,
+                        theme.success.b() as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.success = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 警告颜色
+                ui.horizontal(|ui| {
+                    ui.label("警告颜色:");
+                    let mut color = [
+                        theme.warning.r() as f32 / 255.0,
+                        theme.warning.g() as f32 / 255.0,
+                        theme.warning.b() as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.warning = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 错误颜色
+                ui.horizontal(|ui| {
+                    ui.label("错误颜色:");
+                    let mut color = [
+                        theme.error.r() as f32 / 255.0,
+                        theme.error.g() as f32 / 255.0,
+                        theme.error.b() as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.error = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                // 选中颜色
+                ui.horizontal(|ui| {
+                    ui.label("选中颜色:");
+                    let mut color = [
+                        theme.selection.r() as f32 / 255.0,
+                        theme.selection.g() as f32 / 255.0,
+                        theme.selection.b() as f32 / 255.0,
+                    ];
+                    if ui.color_edit_button_rgb(&mut color).changed() {
+                        theme.selection = Color32::from_rgb(
+                            (color[0] * 255.0) as u8,
+                            (color[1] * 255.0) as u8,
+                            (color[2] * 255.0) as u8,
+                        );
+                        theme_changed = true;
+                        // 立即应用变更
+                        crate::app::RodoApp::set_theme(self, theme.clone(), ui.ctx());
+                    }
+                });
+                
+                ui.add_space(8.0);
+                
+                // 基于预设生成新的自定义主题
+                ui.add_space(8.0);
+                ui.label("从预设复制:");
+                ui.horizontal(|ui| {
+                    if ui.button("明亮").clicked() {
+                        let mut new_theme = crate::theme::Theme::light();
+                        new_theme.theme_type = crate::theme::ThemeType::Custom;
+                        crate::app::RodoApp::set_theme(self, new_theme, ui.ctx());
+                    }
+                    if ui.button("暗黑").clicked() {
+                        let mut new_theme = crate::theme::Theme::dark();
+                        new_theme.theme_type = crate::theme::ThemeType::Custom;
+                        crate::app::RodoApp::set_theme(self, new_theme, ui.ctx());
+                    }
+                    if ui.button("日落").clicked() {
+                        let mut new_theme = crate::theme::Theme::sunset();
+                        new_theme.theme_type = crate::theme::ThemeType::Custom;
+                        crate::app::RodoApp::set_theme(self, new_theme, ui.ctx());
+                    }
+                    if ui.button("海洋").clicked() {
+                        let mut new_theme = crate::theme::Theme::ocean();
+                        new_theme.theme_type = crate::theme::ThemeType::Custom;
+                        crate::app::RodoApp::set_theme(self, new_theme, ui.ctx());
+                    }
+                    if ui.button("森林").clicked() {
+                        let mut new_theme = crate::theme::Theme::forest();
+                        new_theme.theme_type = crate::theme::ThemeType::Custom;
+                        crate::app::RodoApp::set_theme(self, new_theme, ui.ctx());
+                    }
+                });
+                
+                // 添加用户自定义的预设主题
+                let preset_names = self.theme_presets.get_preset_names();
+                if !preset_names.is_empty() {
+                    ui.label("我的预设:");
+                    ui.horizontal_wrapped(|ui| {
+                        for name in preset_names {
+                            let button = ui.button(&name);
+                            if button.clicked() {
+                                if let Err(err) = self.apply_theme_preset(&name, ui.ctx()) {
+                                    eprintln!("应用主题预设失败: {}", err);
+                                    // 显示错误消息
+                                    self.show_confirm(
+                                        &format!("应用主题预设失败: {}", err),
+                                        crate::app::ConfirmationAction::ImportTodos, // 重用已有的确认动作类型
+                                    );
+                                }
+                            }
+                            
+                            // 删除预设按钮
+                            if button.secondary_clicked() || 
+                               (button.clicked() && ui.input(|i| i.modifiers.shift)) {
+                                self.show_confirm(
+                                    &format!("确定要删除主题预设 \"{}\" 吗？", name),
+                                    crate::app::ConfirmationAction::DeleteThemePreset(name.clone()),
+                                );
+                            }
+                        }
+                    });
+                }
+                
+                // 保存当前自定义主题为预设
+                ui.add_space(8.0);
+                ui.label("保存为预设:");
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.temp_input)
+                       .on_hover_text("输入预设名称");
+                    
+                    let can_save = !self.temp_input.trim().is_empty();
+                    if ui.add_enabled(can_save, egui::Button::new("保存")).clicked() {
+                        let name = self.temp_input.trim().to_string();
+                        match self.save_theme_preset(name) {
+                            Ok(_) => {
+                                self.temp_input.clear();
+                            },
+                            Err(err) => {
+                                eprintln!("保存主题预设失败: {}", err);
+                                // 显示错误消息
+                                self.show_confirm(
+                                    &format!("保存主题预设失败: {}", err),
+                                    crate::app::ConfirmationAction::ImportTodos, // 重用已有的确认动作类型
+                                );
+                            }
+                        }
+                    }
+                });
+            });
+        }
         
         ui.add_space(16.0);
         
@@ -1534,6 +1844,13 @@ impl RodoApp {
             String::new()
         };
         
+        // 保存主题预设名，以避免借用冲突
+        let preset_to_delete = if let Some(ConfirmationAction::DeleteThemePreset(_preset)) = &self.confirmation_action {
+            _preset.clone()
+        } else {
+            String::new()
+        };
+        
         egui::Window::new("确认")
             .collapsible(false)
             .resizable(false)
@@ -1566,6 +1883,18 @@ impl RodoApp {
                                 Some(ConfirmationAction::ResetApp) => {
                                     // 恢复应用程序到初始状态
                                     self.reset_app(ctx);
+                                },
+                                Some(ConfirmationAction::DeleteThemePreset(_preset)) => {
+                                    // 使用事先保存的预设名，避免借用冲突
+                                    if !preset_to_delete.is_empty() {
+                                        if let Err(err) = self.delete_theme_preset(&preset_to_delete) {
+                                            eprintln!("删除主题预设失败: {}", err);
+                                            self.show_confirm(
+                                                &format!("删除主题预设失败: {}", err),
+                                                ConfirmationAction::ImportTodos, // 重用已有的确认动作类型
+                                            );
+                                        }
+                                    }
                                 },
                                 Some(ConfirmationAction::ImportTodos) => {
                                     // 使用事先保存的路径，避免借用冲突

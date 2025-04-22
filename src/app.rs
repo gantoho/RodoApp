@@ -1,4 +1,4 @@
-use crate::theme::Theme;
+use crate::theme::{Theme, ThemePresets};
 use crate::todo::{Emoji, Priority, SubTask, Todo, TodoList};
 use egui::FontId;
 
@@ -31,6 +31,8 @@ pub struct RodoApp {
     pub todo_list: TodoList,
     /// 应用主题
     pub theme: Theme,
+    /// 主题预设集合
+    pub theme_presets: ThemePresets,
     /// 编辑中任务的ID
     pub editing_todo_id: Option<String>,
     /// 新任务（用于添加新任务）
@@ -57,9 +59,10 @@ pub enum ConfirmationAction {
     DeleteAllCompleted,
     #[allow(dead_code)]
     ResetSettings,
-    ResetApp,
     ImportTodos,
     DeleteTag(String),
+    ResetApp,
+    DeleteThemePreset(String),
 }
 
 impl Default for RodoApp {
@@ -68,6 +71,7 @@ impl Default for RodoApp {
             view: View::List,
             todo_list: TodoList::load(),
             theme: Theme::default(),
+            theme_presets: ThemePresets::load(),
             editing_todo_id: None,
             new_todo: Todo::new(String::new()),
             temp_input: String::new(),
@@ -112,11 +116,13 @@ impl RodoApp {
         // 加载应用状态，包括任务和主题
         let todo_list = TodoList::load();
         let theme = Theme::load();
+        let theme_presets = ThemePresets::load();
         
         let mut app = Self {
             view: View::List,
             todo_list,
             theme,
+            theme_presets,
             editing_todo_id: None,
             new_todo: Todo::new(String::new()),
             temp_input: String::new(),
@@ -285,6 +291,25 @@ impl RodoApp {
         self.modified = true;
     }
     
+    /// 重置应用程序到初始状态
+    pub fn reset_app(&mut self, ctx: &egui::Context) {
+        self.todo_list = TodoList::default();
+        self.theme = Theme::default();
+        self.theme_presets = ThemePresets::default();
+        self.editing_todo_id = None;
+        self.new_todo = Todo::new(String::new());
+        self.temp_input.clear();
+        self.temp_tag_input.clear();
+        self.modified = true;
+        self.view = View::List;
+        
+        // 应用默认主题
+        self.theme.apply_to_ctx(ctx);
+        
+        // 添加示例任务
+        self.add_sample_todos();
+    }
+    
     /// 设置主题并保存
     pub fn set_theme(&mut self, theme: Theme, ctx: &egui::Context) {
         self.theme = theme;
@@ -295,32 +320,27 @@ impl RodoApp {
         }
     }
     
-    /// 恢复应用程序到初始状态
-    pub fn reset_app(&mut self, ctx: &egui::Context) {
-        // 清空所有待办事项
-        self.todo_list = TodoList::default();
-        
-        // 重置主题为默认值
-        self.theme = Theme::default();
-        self.theme.apply_to_ctx(ctx);
-        
-        // 重置其他状态
-        self.editing_todo_id = None;
-        self.new_todo = Todo::new(String::new());
-        self.temp_input = String::new();
-        self.temp_tag_input = String::new();
-        self.view = View::List;
-        
-        // 标记为已修改，以便保存更改
-        self.modified = true;
-        
-        // 保存更改
-        if let Err(err) = self.todo_list.save() {
-            eprintln!("保存待办事项失败: {}", err);
+    /// 保存当前主题为预设
+    pub fn save_theme_preset(&mut self, name: String) -> Result<(), String> {
+        if name.trim().is_empty() {
+            return Err("预设名称不能为空".to_string());
         }
         
-        if let Err(err) = self.theme.save() {
-            eprintln!("保存主题设置失败: {}", err);
-        }
+        // 添加到预设集合
+        self.theme_presets.add_preset(name, self.theme.clone())
+    }
+    
+    /// 删除主题预设
+    pub fn delete_theme_preset(&mut self, name: &str) -> Result<(), String> {
+        self.theme_presets.remove_preset(name)
+    }
+    
+    /// 应用主题预设
+    pub fn apply_theme_preset(&mut self, name: &str, ctx: &egui::Context) -> Result<(), String> {
+        let preset = self.theme_presets.get_preset(name).cloned()
+            .ok_or_else(|| format!("预设 '{}' 不存在", name))?;
+        
+        self.set_theme(preset, ctx);
+        Ok(())
     }
 }
