@@ -27,6 +27,27 @@ pub enum View {
     MarkdownViewer,
 }
 
+/// 应用程序视觉风格
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum AppStyle {
+    /// 现代风格 - 圆角按钮，柔和阴影，平滑动画
+    Modern,
+    /// 简约风格 - 直角元素，简单线条，最小化装饰
+    Minimal,
+    /// 经典风格 - 轻微的3D效果，传统按钮
+    Classic,
+    /// 复古风格 - 像素感，强烈边框
+    Retro,
+    /// 商务风格 - 严肃专业的外观
+    Business,
+}
+
+impl Default for AppStyle {
+    fn default() -> Self {
+        AppStyle::Modern
+    }
+}
+
 /// 应用程序状态
 pub struct RodoApp {
     /// 当前视图
@@ -37,6 +58,8 @@ pub struct RodoApp {
     pub theme: Theme,
     /// 主题预设集合
     pub theme_presets: ThemePresets,
+    /// 应用视觉风格
+    pub app_style: AppStyle,
     /// 编辑中任务的ID
     pub editing_todo_id: Option<String>,
     /// 新任务（用于添加新任务）
@@ -86,12 +109,19 @@ struct MarkdownDirectoryInfo {
     current_content: Option<String>,  // 记录当前文件的内容
 }
 
+/// 应用风格配置
+#[derive(Serialize, Deserialize)]
+struct AppStyleConfig {
+    app_style: AppStyle,
+}
+
 impl Default for RodoApp {
     fn default() -> Self {
         // 加载应用状态
         let todo_list = TodoList::load();
         let theme = Theme::default();
         let theme_presets = ThemePresets::default();
+        let app_style = Self::load_app_style().unwrap_or_default();
         
         // 加载上次打开的Markdown目录信息
         let (markdown_directory, markdown_files, current_file, current_content) = 
@@ -102,6 +132,7 @@ impl Default for RodoApp {
             todo_list,
             theme,
             theme_presets,
+            app_style,
             editing_todo_id: None,
             new_todo: Todo::new(String::new()),
             temp_input: String::new(),
@@ -161,6 +192,7 @@ impl RodoApp {
             todo_list,
             theme,
             theme_presets,
+            app_style: Self::load_app_style().unwrap_or_default(),
             editing_todo_id: None,
             new_todo: Todo::new(String::new()),
             temp_input: String::new(),
@@ -441,5 +473,56 @@ impl RodoApp {
         std::fs::create_dir_all(data_dir).map_err(|e| format!("无法创建数据目录: {}", e))?;
         
         Ok(data_dir.join("markdown_info.json"))
+    }
+    
+    /// 加载应用程序风格设置
+    fn load_app_style() -> Result<AppStyle, String> {
+        let path = Self::get_app_style_file_path()?;
+        if !path.exists() {
+            return Ok(AppStyle::default());
+        }
+        
+        let data = std::fs::read_to_string(path)
+            .map_err(|e| format!("读取应用风格配置文件失败: {}", e))?;
+            
+        let config: AppStyleConfig = serde_json::from_str(&data)
+            .map_err(|e| format!("解析应用风格配置JSON失败: {}", e))?;
+            
+        Ok(config.app_style)
+    }
+    
+    /// 保存应用程序风格设置
+    pub fn save_app_style(&self) -> Result<(), String> {
+        let config = AppStyleConfig {
+            app_style: self.app_style.clone(),
+        };
+        
+        let path = Self::get_app_style_file_path()?;
+        let serialized = serde_json::to_string(&config)
+            .map_err(|e| format!("序列化应用风格配置失败: {}", e))?;
+            
+        std::fs::write(path, serialized)
+            .map_err(|e| format!("写入应用风格配置文件失败: {}", e))?;
+            
+        Ok(())
+    }
+    
+    /// 设置应用程序风格
+    pub fn set_app_style(&mut self, style: AppStyle) -> Result<(), String> {
+        self.app_style = style;
+        self.save_app_style()
+    }
+    
+    /// 获取应用风格配置文件路径
+    fn get_app_style_file_path() -> Result<PathBuf, String> {
+        let app_dirs = match directories::ProjectDirs::from("com", "rodo", "rodo") {
+            Some(dirs) => dirs,
+            None => return Err("无法获取应用数据目录".to_string()),
+        };
+        
+        let data_dir = app_dirs.data_dir();
+        std::fs::create_dir_all(data_dir).map_err(|e| format!("无法创建数据目录: {}", e))?;
+        
+        Ok(data_dir.join("app_style.json"))
     }
 }

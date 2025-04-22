@@ -136,8 +136,47 @@ impl RodoApp {
             
             ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
                 // 标签管理按钮
-                if ui.button("🏷️ 标签").clicked() {
-                    self.view = View::Tags;
+                {
+                    let mut button = egui::Button::new(RichText::new("🏷️ 标签").size(18.0).strong());
+                    
+                    // 设置按钮样式
+                    let theme_color = self.theme.accent.linear_multiply(0.9);
+                    button = button.fill(theme_color)
+                                   .stroke(egui::Stroke::new(3.0, self.theme.accent))
+                                   .rounding(egui::Rounding::same(16.0));
+                    
+                    // 添加按钮到UI
+                    let response = ui.add_sized(Vec2::new(120.0, 40.0), button);
+                    
+                    // 绘制阴影效果
+                    let rect = response.rect;
+                    let shadow_offset = 4.0;
+                    let shadow_rect = egui::Rect::from_min_max(
+                        rect.min + Vec2::new(shadow_offset, shadow_offset),
+                        rect.max + Vec2::new(shadow_offset, shadow_offset),
+                    );
+                    
+                    // 在按钮后面绘制阴影
+                    ui.painter().rect_filled(
+                        shadow_rect,
+                        egui::Rounding::same(16.0),
+                        Color32::from_rgba_premultiplied(0, 0, 0, 50),
+                    );
+                    
+                    // 添加悬停效果
+                    if response.hovered() {
+                        let hover_rect = rect.expand(2.0);
+                        ui.painter().rect_stroke(
+                            hover_rect,
+                            egui::Rounding::same(16.0),
+                            egui::Stroke::new(2.0, Color32::WHITE.linear_multiply(0.7)),
+                        );
+                    }
+                    
+                    // 处理点击事件
+                    if response.clicked() {
+                        self.view = View::Tags;
+                    }
                 }
                 
                 // 删除Markdown预览器按钮
@@ -154,25 +193,58 @@ impl RodoApp {
                     };
                     
                     // 创建一个特殊风格的按钮
-                    let mut button = egui::Button::new(RichText::new(sort_text).strong());
+                    let mut button = egui::Button::new(RichText::new(sort_text).size(18.0).strong());
                     
                     // 根据排序状态设置按钮样式
                     if self.todo_list.priority_sort.is_some() {
                         // 激活状态下使用填充色
-                        button = button.fill(ui.visuals().selection.bg_fill)
-                                      .stroke(egui::Stroke::new(2.0, ui.visuals().selection.stroke.color))
-                                      .rounding(egui::Rounding::same(8.0));
+                        let accent_color = if self.todo_list.priority_sort == Some(true) {
+                            self.theme.warning.linear_multiply(1.2) // 高优先级时用警告色
+                        } else {
+                            self.theme.accent.linear_multiply(1.2) // 低优先级时用主题色
+                        };
+                        
+                        button = button.fill(accent_color)
+                                      .stroke(egui::Stroke::new(3.0, self.theme.accent))
+                                      .rounding(egui::Rounding::same(16.0));
                     } else {
                         // 未激活状态下使用特殊的边框和轻微填充
-                        let accent_color = self.theme.accent;
+                        let accent_color = self.theme.text_secondary;
                         button = button.fill(Color32::from_rgba_premultiplied(
-                                    accent_color.r(), accent_color.g(), accent_color.b(), 20))
-                                 .stroke(egui::Stroke::new(2.0, accent_color))
-                                 .rounding(egui::Rounding::same(8.0));
+                                    accent_color.r(), accent_color.g(), accent_color.b(), 40))
+                                 .stroke(egui::Stroke::new(3.0, accent_color))
+                                 .rounding(egui::Rounding::same(16.0));
                     }
                     
                     // 添加额外的内边距使按钮更大
-                    if ui.add_sized(Vec2::new(130.0, 32.0), button).clicked() {
+                    let response = ui.add_sized(Vec2::new(150.0, 40.0), button);
+                    
+                    // 绘制阴影效果
+                    let rect = response.rect;
+                    let shadow_offset = 4.0;
+                    let shadow_rect = egui::Rect::from_min_max(
+                        rect.min + Vec2::new(shadow_offset, shadow_offset),
+                        rect.max + Vec2::new(shadow_offset, shadow_offset),
+                    );
+                    
+                    // 在按钮后面绘制阴影
+                    ui.painter().rect_filled(
+                        shadow_rect,
+                        egui::Rounding::same(16.0),
+                        Color32::from_rgba_premultiplied(0, 0, 0, 50), // 半透明黑色阴影
+                    );
+                    
+                    // 添加悬停效果
+                    if response.hovered() {
+                        let hover_rect = rect.expand(2.0);
+                        ui.painter().rect_stroke(
+                            hover_rect,
+                            egui::Rounding::same(16.0),
+                            egui::Stroke::new(2.0, Color32::WHITE.linear_multiply(0.7)),
+                        );
+                    }
+                    
+                    if response.clicked() {
                         // 切换排序状态：时间排序 -> 优先级高 -> 优先级低 -> 时间排序
                         self.todo_list.priority_sort = match self.todo_list.priority_sort {
                             None => Some(true),        // 时间排序 -> 优先级高
@@ -194,29 +266,29 @@ impl RodoApp {
                     };
                     
                     // 创建一个特殊风格的按钮，使用更具有辨识度的样式
-                    let mut button = egui::Button::new(RichText::new(filter_text).strong());
+                    let mut button = egui::Button::new(RichText::new(filter_text).size(18.0).strong());
                     
                     // 当过滤器激活时使用不同的样式
                     if self.todo_list.filter_completed {
                         // 显示所有 - 使用蓝色调
                         let color = self.theme.accent.linear_multiply(1.2); // 使用主题的强调色，但稍微亮一点
                         button = button.fill(color)
-                                      .stroke(egui::Stroke::new(2.0, self.theme.accent))
-                                      .rounding(egui::Rounding::same(12.0));
+                                      .stroke(egui::Stroke::new(3.0, self.theme.accent))
+                                      .rounding(egui::Rounding::same(16.0));
                     } else {
                         // 隐藏已完成 - 使用绿色调
                         let color = self.theme.success.linear_multiply(0.8); // 使用主题的成功色，但稍微暗一点
                         button = button.fill(color)
-                                 .stroke(egui::Stroke::new(2.0, self.theme.success))
-                                 .rounding(egui::Rounding::same(12.0));
+                                 .stroke(egui::Stroke::new(3.0, self.theme.success))
+                                 .rounding(egui::Rounding::same(16.0));
                     }
                     
                     // 使用特殊尺寸和样式，添加阴影效果使按钮看起来像是浮起来的
-                    let response = ui.add_sized(Vec2::new(150.0, 36.0), button);
+                    let response = ui.add_sized(Vec2::new(170.0, 40.0), button);
                     
-                    // 绘制微弱的阴影效果
+                    // 绘制更明显的阴影效果
                     let rect = response.rect;
-                    let shadow_offset = 3.0;
+                    let shadow_offset = 4.0;
                     let shadow_rect = egui::Rect::from_min_max(
                         rect.min + Vec2::new(shadow_offset, shadow_offset),
                         rect.max + Vec2::new(shadow_offset, shadow_offset),
@@ -225,9 +297,19 @@ impl RodoApp {
                     // 在按钮后面绘制阴影
                     ui.painter().rect_filled(
                         shadow_rect,
-                        egui::Rounding::same(12.0),
-                        Color32::from_rgba_premultiplied(0, 0, 0, 30), // 半透明黑色阴影
+                        egui::Rounding::same(16.0),
+                        Color32::from_rgba_premultiplied(0, 0, 0, 50), // 半透明黑色阴影，增加对比度
                     );
+                    
+                    // 添加悬停效果
+                    if response.hovered() {
+                        let hover_rect = rect.expand(2.0);
+                        ui.painter().rect_stroke(
+                            hover_rect,
+                            egui::Rounding::same(16.0),
+                            egui::Stroke::new(2.0, Color32::WHITE.linear_multiply(0.7)),
+                        );
+                    }
                     
                     // 处理点击事件
                     if response.clicked() {
@@ -475,11 +557,38 @@ impl RodoApp {
                 let accent_color = self.theme.accent;
                 add_button = add_button
                     .fill(accent_color)
-                    .stroke(egui::Stroke::new(1.5, Color32::WHITE))
-                    .rounding(egui::Rounding::same(8.0));
+                    .stroke(egui::Stroke::new(3.0, Color32::WHITE))
+                    .rounding(egui::Rounding::same(16.0));
                 
                 // 添加额外的内边距和阴影效果
-                if ui.add_sized(Vec2::new(130.0, 46.0), add_button).clicked() {
+                let response = ui.add_sized(Vec2::new(140.0, 46.0), add_button);
+                
+                // 绘制阴影效果
+                let rect = response.rect;
+                let shadow_offset = 4.0;
+                let shadow_rect = egui::Rect::from_min_max(
+                    rect.min + Vec2::new(shadow_offset, shadow_offset),
+                    rect.max + Vec2::new(shadow_offset, shadow_offset),
+                );
+                
+                // 在按钮后面绘制阴影
+                ui.painter().rect_filled(
+                    shadow_rect,
+                    egui::Rounding::same(16.0),
+                    Color32::from_rgba_premultiplied(0, 0, 0, 50),
+                );
+                
+                // 添加悬停效果
+                if response.hovered() {
+                    let hover_rect = rect.expand(2.0);
+                    ui.painter().rect_stroke(
+                        hover_rect,
+                        egui::Rounding::same(16.0),
+                        egui::Stroke::new(2.0, Color32::WHITE.linear_multiply(0.7)),
+                    );
+                }
+                
+                if response.clicked() {
                     self.view = View::AddTodo;
                     self.new_todo = Todo::new(String::new());
                 }
@@ -1468,6 +1577,58 @@ impl RodoApp {
                 });
             });
         }
+        
+        ui.add_space(16.0);
+        
+        // 应用风格设置
+        ui.heading("应用风格");
+        ui.add_space(8.0);
+        
+        ui.horizontal_wrapped(|ui| {
+            let style_options = [
+                (crate::app::AppStyle::Modern, "现代", Color32::from_rgb(66, 133, 244)),
+                (crate::app::AppStyle::Minimal, "简约", Color32::from_rgb(50, 50, 60)),
+                (crate::app::AppStyle::Classic, "经典", Color32::from_rgb(180, 120, 80)),
+                (crate::app::AppStyle::Retro, "复古", Color32::from_rgb(246, 190, 0)),
+                (crate::app::AppStyle::Business, "商务", Color32::from_rgb(20, 80, 120)),
+            ];
+            
+            for (style_type, name, color) in &style_options {
+                let is_selected = &self.app_style == style_type;
+                
+                let mut button = Button::new(*name);
+                if is_selected {
+                    button = button.fill(*color).stroke(egui::Stroke::new(2.0, self.theme.accent));
+                } else {
+                    button = button.fill(Color32::from_rgba_premultiplied(
+                        color.r(), color.g(), color.b(), 40
+                    )).stroke(egui::Stroke::new(1.0, *color));
+                }
+                
+                // 添加圆角和内边距
+                button = button.rounding(egui::Rounding::same(8.0));
+                
+                if ui.add_sized(Vec2::new(100.0, 40.0), button).clicked() && !is_selected {
+                    // 改变应用风格并保存
+                    if let Err(e) = self.set_app_style(style_type.clone()) {
+                        eprintln!("保存应用风格失败: {}", e);
+                    }
+                }
+            }
+        });
+        
+        ui.add_space(8.0);
+        
+        // 风格说明
+        let style_desc = match self.app_style {
+            crate::app::AppStyle::Modern => "现代风格：圆角按钮，柔和阴影，现代感的界面元素",
+            crate::app::AppStyle::Minimal => "简约风格：扁平化设计，简洁线条，最小装饰元素",
+            crate::app::AppStyle::Classic => "经典风格：传统窗口界面，中等圆角，标准按钮",
+            crate::app::AppStyle::Retro => "复古风格：像素感，强烈边框，鲜明对比色",
+            crate::app::AppStyle::Business => "商务风格：严肃专业的外观，清晰的层次结构",
+        };
+        
+        ui.label(RichText::new(style_desc).italics());
         
         ui.add_space(16.0);
         
