@@ -37,58 +37,70 @@ impl eframe::App for RodoApp {
         // 应用主题
         self.theme.apply_to_ctx(ctx);
         
-        // 顶部面板
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+        // 顶部面板 - 设置为固定高度
+        egui::TopBottomPanel::top("top_panel")
+            .exact_height(36.0)  // 略微增加面板高度
+            .show(ctx, |ui| {
+            // 添加上方间距，比下方稍多一些
             ui.add_space(8.0);
             
-            ui.horizontal(|ui| {
-                ui.add_space(16.0);
-                
-                // 标志和标题
-                ui.heading(RichText::new("Rodo").color(self.theme.accent));
-                
-                ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
-                    // 设置按钮
-                    if ui.button("⚙️").clicked() {
-                        self.view = View::Settings;
-                    }
+            ui.vertical_centered(|ui| {
+                ui.horizontal(|ui| {
+                    // 最左侧添加一点点空间
+                    ui.add_space(0.0);
                     
-                    // Markdown按钮 - 在设置按钮前面
-                    if ui.button("📄").clicked() {
-                        self.view = View::MarkdownViewer;
+                    // 将布局改为从左到右，使按钮更紧凑，但添加适当间距
+                    ui.with_layout(Layout::left_to_right(egui::Align::Center), |ui| {
+                        // 任务列表按钮 - 使用固定大小
+                        if ui.add_sized([32.0, 32.0], egui::Button::new("📝")).clicked() {
+                            self.view = View::List;
+                        }
                         
-                        // 如果已经有保存的目录但文件列表为空，尝试重新加载目录中的文件
-                        if let Some(dir_path) = &self.current_markdown_directory {
-                            if self.markdown_files.is_empty() {
-                                if let Ok(files) = markdown::get_markdown_files(std::path::Path::new(dir_path)) {
-                                    self.markdown_files = files;
-                                }
-                            }
+                        // 添加适当间距
+                        ui.add_space(0.0);
+                        
+                        // Markdown按钮 - 使用固定大小
+                        if ui.add_sized([32.0, 32.0], egui::Button::new("📄")).clicked() {
+                            self.view = View::MarkdownViewer;
                             
-                            // 如果有保存的文件路径但内容为空，尝试加载文件内容
-                            if let Some(file_path) = &self.current_markdown_path {
-                                if self.markdown_content.is_empty() {
-                                    let path = std::path::Path::new(file_path);
-                                    if path.exists() {
-                                        if let Ok(content) = markdown::load_markdown_file(path) {
-                                            self.markdown_content = content;
+                            // 如果已经有保存的目录但文件列表为空，尝试重新加载目录中的文件
+                            if let Some(dir_path) = &self.current_markdown_directory {
+                                if self.markdown_files.is_empty() {
+                                    if let Ok(files) = markdown::get_markdown_files(std::path::Path::new(dir_path)) {
+                                        self.markdown_files = files;
+                                    }
+                                }
+                                
+                                // 如果有保存的文件路径但内容为空，尝试加载文件内容
+                                if let Some(file_path) = &self.current_markdown_path {
+                                    if self.markdown_content.is_empty() {
+                                        let path = std::path::Path::new(file_path);
+                                        if path.exists() {
+                                            if let Ok(content) = markdown::load_markdown_file(path) {
+                                                self.markdown_content = content;
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
+                        
+                        // 添加适当间距
+                        ui.add_space(0.0);
+                        
+                        // 设置按钮 - 使用固定大小
+                        if ui.add_sized([32.0, 32.0], egui::Button::new("⚙️")).clicked() {
+                            self.view = View::Settings;
+                        }
+                    });
                     
-                    // 任务列表按钮
-                    if ui.button("📝").clicked() {
-                        self.view = View::List;
-                    }
-                    
-                    ui.add_space(16.0);
+                    // 右侧添加一点点空间
+                    ui.add_space(0.0);
                 });
             });
             
-            ui.add_space(8.0);
+            // 添加下方间距
+            ui.add_space(0.0);
         });
         
         // 主要内容区域
